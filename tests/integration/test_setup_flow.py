@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from orchestrator import SetupOrchestrator
 from checkers import check_software
 from config import STACKS
-from models.tool_signal import ToolSignal
+from models import ToolSignal
 
 
 class TestFullSetupFlow(unittest.TestCase):

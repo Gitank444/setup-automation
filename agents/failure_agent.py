@@ -1,5 +1,5 @@
 from enum import Enum
-from models.tool_signal import LocationVersion
+from models import LocationVersion
 from config import INSTALL_MAP
 
 class FailureType(Enum):

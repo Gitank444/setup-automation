@@ -5,8 +5,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from agents.resolver_agent import ResolverAgent
-from models.tool_signal import ToolSignal
-from models.tool_status import ToolStatus
+from models import ToolSignal
+from models import ToolStatus
 
 
 class TestResolverAgent(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestResolverAgent(unittest.TestCase):
 
     def test_conflict_tool(self):
         """A tool with multiple different versions across locations should be CONFLICT."""
-        from models.tool_signal import LocationVersion
+        from models import LocationVersion
         locations = [
             LocationVersion(path="C:/Python311/python.exe", version="3.11.4"),
             LocationVersion(path="C:/Python38/python.exe", version="3.8.0")

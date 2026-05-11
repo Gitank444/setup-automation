@@ -5,7 +5,7 @@ import sys
 import os
 import shutil
 from config import COMMAND_MAP, VERSION_FLAG, TOOL_TYPE
-from models.tool_signal import ToolSignal, LocationVersion
+from models import ToolSignal, LocationVersion
 
 class AdvancedDetector:
     """
@@ -155,6 +155,45 @@ class AdvancedDetector:
                     return path
                 
         
+        return None
+
+    def _find_vscode_cli_wrapper(self):
+        """
+        Find the Windows VSCode CLI wrapper script.
+
+        The GUI binary `Code.exe` may be on PATH, but the CLI wrapper
+        (`code.cmd` or `code.bat`) is the reliable entry point for version
+        checks and avoids accidentally launching the editor UI.
+        """
+        if not self.is_windows:
+            return None
+
+        for wrapper in ("code.cmd", "code.bat"):
+            wrapper_path = shutil.which(wrapper)
+            if wrapper_path:
+                return wrapper_path
+
+        for folder in os.getenv("PATH", "").split(os.pathsep):
+            if not folder:
+                continue
+            for wrapper in ("code.cmd", "code.bat"):
+                candidate = os.path.join(folder, wrapper)
+                if os.path.isfile(candidate):
+                    return candidate
+
+        vscode_install_dirs = [
+            os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Microsoft VS Code"),
+            r"C:\Program Files\Microsoft VS Code",
+            r"C:\Program Files (x86)\Microsoft VS Code",
+        ]
+
+        for base in vscode_install_dirs:
+            if not base:
+                continue
+            candidate = os.path.join(base, "bin", "code.cmd")
+            if os.path.isfile(candidate):
+                return candidate
+
         return None
     
     def get_common_install_paths(self):
@@ -386,17 +425,31 @@ class AdvancedDetector:
 
         # Search PATH first (highest priority)
         path_location = self.strategy_path_check(cmd)
-        if path_location:
+        vscode_wrapper = self._find_vscode_cli_wrapper() if tool == "vscode" and self.is_windows else None
+
+        if path_location or vscode_wrapper:
             path_found = True
-            primary_location = path_location
-            primary_version = self.strategy_version_extract(cmd, flags)
-            # Track this location with its version
+            primary_location = path_location or vscode_wrapper
+
+            # Prefer the VSCode CLI wrapper for version checks when it exists.
+            version_cmd = vscode_wrapper if vscode_wrapper else cmd
+            primary_version = self.strategy_version_extract(version_cmd, flags)
+
             all_locations_found.append(LocationVersion(
-                path=path_location, 
+                path=primary_location,
                 version=primary_version
             ))
-            # Mark as broken if path found but no version available
-            if not primary_version:
+
+            if vscode_wrapper and vscode_wrapper != primary_location:
+                wrapper_version = self.strategy_version_extract(vscode_wrapper, flags)
+                all_locations_found.append(LocationVersion(
+                    path=vscode_wrapper,
+                    version=wrapper_version
+                ))
+                if wrapper_version and not primary_version:
+                    primary_version = wrapper_version
+
+            if not primary_version and tool != "vscode":
                 broken = True
 
         # Search known paths (secondary priority)

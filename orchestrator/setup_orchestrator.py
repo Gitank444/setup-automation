@@ -9,7 +9,7 @@ from installers import (
 )
 from agents.resolver_agent import ResolverAgent
 from agents.failure_agent import FailureAgent
-from models.tool_status import ToolStatus
+from models import ToolStatus
 import signal
 
 class SetupOrchestrator:
