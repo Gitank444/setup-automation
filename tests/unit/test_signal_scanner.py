@@ -57,6 +57,61 @@ class TestSignalScanner(unittest.TestCase):
         self.assertTrue(signal.broken)
         self.assertIsNone(signal.version)
 
+    @patch('checkers.advanced_checker.shutil.which')
+    @patch('checkers.advanced_checker.subprocess.run')
+    def test_detects_vscode_cli_wrapper_and_reports_version(self, mock_run, mock_which):
+        """VSCode should use the CLI wrapper for version detection when available."""
+        def which_side_effect(arg):
+            if arg == 'code':
+                return r"C:\Users\Gitank\AppData\Local\Programs\Microsoft VS Code\code.EXE"
+            if arg == 'code.cmd':
+                return r"C:\Users\Gitank\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"
+            return None
+
+        mock_which.side_effect = which_side_effect
+
+        def run_side_effect(cmd, *args, **kwargs):
+            command_path = cmd[0]
+            if command_path.endswith('code.EXE'):
+                return MagicMock(returncode=1, stdout="", stderr="")
+            if command_path.endswith('code.cmd'):
+                return MagicMock(returncode=0, stdout="22.22.1\n", stderr="")
+            return MagicMock(returncode=1, stdout="", stderr="")
+
+        mock_run.side_effect = run_side_effect
+
+        detector = AdvancedDetector()
+        signal = detector.check_software('vscode')
+
+        self.assertTrue(signal.binary_found)
+        self.assertTrue(signal.path_found)
+        self.assertFalse(signal.broken)
+        self.assertEqual(signal.version, '22.22.1')
+        self.assertEqual(signal.location, r"C:\Users\Gitank\AppData\Local\Programs\Microsoft VS Code\code.EXE")
+        self.assertTrue(any(loc.path.endswith('code.cmd') for loc in signal.all_locations))
+
+    @patch('checkers.advanced_checker.shutil.which')
+    @patch('checkers.advanced_checker.subprocess.run')
+    def test_vscode_code_exe_without_version_is_not_broken(self, mock_run, mock_which):
+        """Code.exe without version output should still be considered installed."""
+        def which_side_effect(arg):
+            if arg == 'code':
+                return r"C:\Users\Gitank\AppData\Local\Programs\Microsoft VS Code\code.EXE"
+            if arg in ('code.cmd', 'code.bat'):
+                return None
+            return None
+
+        mock_which.side_effect = which_side_effect
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
+
+        detector = AdvancedDetector()
+        signal = detector.check_software('vscode')
+
+        self.assertTrue(signal.binary_found)
+        self.assertTrue(signal.path_found)
+        self.assertFalse(signal.broken)
+        self.assertIsNone(signal.version)
+
 
 if __name__ == '__main__':
     unittest.main()
