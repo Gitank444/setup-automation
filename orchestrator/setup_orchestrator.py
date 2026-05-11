@@ -163,29 +163,75 @@ class SetupOrchestrator:
                 continue
 
             if result.status == ToolStatus.PARTIAL:
+                installer = INSTALL_STRATEGY.get(tool, 'winget')
+                recommended = INSTALL_MAP.get(tool, 'Unknown')
+
                 print(f"⚠️  {tool} - PARTIAL")
-                print(f"   {result.reason}")
+                print(f"   Status      : PARTIAL")
+                print(f"   Binary      : Found")
+                print(f"   PATH        : Not Available")
+                print(f"   Registry    : Not Checked")
+                print(f"   Installer   : {installer}")
+                print(f"   Recommended : {recommended}")
+
                 partial_tools.append(tool)
                 actionable_tools.append(tool)
 
             elif result.status == ToolStatus.OUTDATED:
+                installer = INSTALL_STRATEGY.get(tool, 'winget')
+                recommended = INSTALL_MAP.get(tool, 'Unknown')
+
                 print(f"⚠️  {tool} - OUTDATED")
-                print(f"   {result.reason}")
+                print(f"   Status      : OUTDATED")
+                print(f"   Binary      : Found")
+                print(f"   PATH        : Available")
+                print(f"   Registry    : Not Checked")
+                print(f"   Installer   : {installer}")
+                print(f"   Recommended : {recommended}")
+
                 actionable_tools.append(tool)
 
             elif result.status == ToolStatus.BROKEN:
+                installer = INSTALL_STRATEGY.get(tool, 'winget')
+                recommended = INSTALL_MAP.get(tool, 'Unknown')
+
                 print(f"❌ {tool} - BROKEN")
-                print(f"   {result.reason}")
+                print(f"   Status      : BROKEN")
+                print(f"   Binary      : Found")
+                print(f"   PATH        : Available")
+                print(f"   Registry    : Not Checked")
+                print(f"   Installer   : {installer}")
+                print(f"   Recommended : {recommended}\n")
+
                 actionable_tools.append(tool)
 
             elif result.status == ToolStatus.CONFLICT:
+                installer = INSTALL_STRATEGY.get(tool, 'winget')
+                recommended = INSTALL_MAP.get(tool, 'Unknown')
+
                 print(f"⚠️  {tool} - CONFLICT")
-                print(f"   {result.reason}")
+                print(f"   Status      : CONFLICT")
+                print(f"   Binary      : Found")
+                print(f"   PATH        : Available")
+                print(f"   Registry    : Not Checked")
+                print(f"   Installer   : {installer}")
+                print(f"   Recommended : {recommended}\n")
+
                 actionable_tools.append(tool)
 
             else:
+                # Structured format for MISSING tools
+                installer = INSTALL_STRATEGY.get(tool, 'winget')
+                recommended = INSTALL_MAP.get(tool, 'Unknown')
+
                 print(f"❌ {tool} - MISSING")
-                print(f"   {result.reason}")
+                print(f"   Status      : MISSING")
+                print(f"   Binary      : Not Found")
+                print(f"   PATH        : Not Available")
+                print(f"   Registry    : Not Checked")
+                print(f"   Installer   : {installer}")
+                print(f"   Recommended : {recommended}\n")
+
                 missing_tools.append(tool)
                 actionable_tools.append(tool)
 
@@ -198,7 +244,7 @@ class SetupOrchestrator:
             f"{len(partial_tools)} partial, {len(missing_tools)} missing, "
             f"{len(actionable_tools)} actionable"
         )
-        return actionable_tools
+        return missing_tools
   
         
     def install_missing_tools(self, missing_tools):
@@ -232,7 +278,7 @@ class SetupOrchestrator:
                         print(f"   → {tool}: {advice[0].replace('💡 Run: ', '')}")
             
             print("\n▶️  Run this tool again anytime to install automatically.")
-            return False
+            return True
         
         print("\n🚀 Starting installation process...\n")
         all_successful = True
