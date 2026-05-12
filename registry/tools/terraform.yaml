@@ -1,0 +1,13 @@
+name: terraform
+command: terraform
+version_flags:
+- --version
+type: system
+install_package: Hashicorp.Terraform
+detection:
+  executable_names:
+  - terraform
+  - terraform.exe
+  search_paths: []
+  registry_names:
+  - Terraform

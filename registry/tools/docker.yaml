@@ -1,0 +1,19 @@
+name: docker
+command: docker
+version_flags:
+- --version
+type: system
+install_package: Docker.DockerDesktop
+install_strategy: winget
+minimum_version: 24.0.0
+detection:
+  executable_names:
+  - docker
+  - docker.exe
+  search_paths:
+  - C:\Program Files\Docker\Docker
+  - '%USERPROFILE%\AppData\Local\Docker'
+  app_paths:
+  - /Applications/Docker.app
+  registry_names:
+  - Docker

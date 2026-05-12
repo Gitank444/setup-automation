@@ -1,0 +1,12 @@
+name: jupyter
+command: jupyter
+version_flags:
+- --version
+type: python_lib
+detection:
+  executable_names:
+  - jupyter
+  - jupyter.exe
+  search_paths: []
+  registry_names:
+  - Jupyter

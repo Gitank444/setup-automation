@@ -1,0 +1,14 @@
+name: git
+command: git
+version_flags:
+- --version
+type: system
+install_package: Git.Git
+minimum_version: 2.40.0
+detection:
+  executable_names:
+  - git
+  - git.exe
+  search_paths: []
+  registry_names:
+  - Git

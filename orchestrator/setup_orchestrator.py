@@ -1,7 +1,7 @@
 """Main orchestrator for setup automation."""
 import time
 import threading
-from config import STACKS, INSTALL_MAP, INSTALL_STRATEGY, TOOL_TYPE
+from config import STACKS, INSTALL_MAP, INSTALL_STRATEGY, TOOL_TYPE, VERSIONED_INSTALL
 from checkers import check_software_advanced
 from installers import (
     WingetInstaller, PipInstaller, NpmInstaller, 
@@ -33,7 +33,145 @@ class SetupOrchestrator:
         }
         self.resolver_agent = ResolverAgent()
         self.failure_agent = FailureAgent()
-    
+
+    def _get_version_metadata(self, tool):
+        return VERSIONED_INSTALL.get(tool)
+
+    def _resolve_package_target(self, tool, version=None):
+        package = INSTALL_MAP.get(tool)
+        version_metadata = self._get_version_metadata(tool) or {}
+
+        if version and version_metadata:
+            version_specific = version_metadata.get("versions", {}).get(version)
+            if version_specific:
+                return version_specific
+
+        if version and TOOL_TYPE.get(tool) == "python_lib":
+            return f"{tool}=={version}"
+
+        if version and TOOL_TYPE.get(tool) == "npm_lib":
+            return f"{tool}@{version}"
+
+        return package
+
+    def _get_installer_for_tool(self, tool):
+        strategy = INSTALL_STRATEGY.get(tool, "default")
+        if strategy == "npm":
+            return self.installers['npm']
+        if strategy == "conda":
+            return self.installers['conda']
+        if strategy == "pip":
+            return self.installers['pip']
+        if strategy == "chocolatey":
+            return self.installers['chocolatey']
+        return self.installers['winget']
+
+    def _repair_tool(self, tool, version=None):
+        print(f"\n🔧 Repairing {tool}...")
+        target = self._resolve_package_target(tool, version)
+        installer = self._get_installer_for_tool(tool)
+        global_install = tool in ["typescript", "yarn"]
+
+        if hasattr(installer, 'uninstall') and target:
+            installer.uninstall(target, version=version, global_flag=global_install)
+
+        return self.install_tool(tool, version)
+
+    def _handle_repairs(self, repair_tools):
+        if not repair_tools:
+            return
+
+        print("\n🛠️ Repair candidates detected:")
+        for tool, status in repair_tools:
+            print(f"   - {tool}: {status.name}")
+
+        for tool, status in repair_tools:
+            answer = input(f"\nDo you want to fix {tool} by reinstalling it? (y/n): ")
+            if answer.strip().lower() != 'y':
+                continue
+            version_choice = self._select_install_version(tool)
+            if version_choice:
+                print(f"   → Reinstalling {tool} version {version_choice}")
+            else:
+                print(f"   → Reinstalling {tool}")
+            self._repair_tool(tool, version_choice)
+
+    def _offer_installed_version_changes(self, required_tools):
+        versioned_installed = []
+        for tool in required_tools:
+            metadata = self._get_version_metadata(tool)
+            if not metadata:
+                continue
+
+            signal = check_software_advanced(tool)
+            result = self.resolver_agent.resolve(signal)
+            if result.status == ToolStatus.INSTALLED and signal.version:
+                versioned_installed.append((tool, signal.version))
+
+        if not versioned_installed:
+            return
+
+        print("\n✅ Your stack is already installed with these versions:")
+        for idx, (tool, version) in enumerate(versioned_installed, start=1):
+            print(f"   {idx}. {tool}: {version}")
+
+        choice = input("\nDo you want to install a different version for any of these tools? (y/n): ")
+        if choice.strip().lower() != 'y':
+            return
+
+        selection = input("Select a tool number to change version, or press Enter to skip: ").strip()
+        if not selection:
+            return
+
+        if not selection.isdigit() or not (1 <= int(selection) <= len(versioned_installed)):
+            print("Invalid selection. Skipping version changes.")
+            return
+
+        selected_tool = versioned_installed[int(selection) - 1][0]
+        current_version = versioned_installed[int(selection) - 1][1]
+        new_version = self._select_install_version(selected_tool)
+        if not new_version or new_version == current_version:
+            print(f"No change made for {selected_tool}.")
+            return
+
+        print(f"\n🔁 Reinstalling {selected_tool} as version {new_version}...")
+        self._repair_tool(selected_tool, new_version)
+
+    def _select_install_version(self, tool):
+        metadata = self._get_version_metadata(tool)
+        if not metadata:
+            return None
+
+        versions = list(metadata.get("versions", {}).keys())
+        default = metadata.get("default") or (versions[0] if versions else None)
+        if not versions:
+            return None
+
+        print(f"\n🔢 {tool} version selection")
+        print(f"   Default: {default}")
+
+        if len(versions) == 1:
+            return default
+
+        for index, version in enumerate(versions, start=1):
+            marker = " (default)" if version == default else ""
+            print(f"   {index}. {version}{marker}")
+
+        choice = input(f"   Choose version or press Enter to use default [{default}]: ").strip()
+        if choice == "":
+            return default
+
+        if choice.isdigit():
+            selected_index = int(choice) - 1
+            if 0 <= selected_index < len(versions):
+                return versions[selected_index]
+
+        if choice in versions:
+            return choice
+
+        print(f"   Invalid selection, using default {default}.")
+        return default
+
     def _spinner(self, stop_event):
         """Display a spinning animation while installation runs."""
         spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -148,6 +286,8 @@ class SetupOrchestrator:
         installed_tools = []
         partial_tools = []
         missing_tools = []
+        repair_tools = []
+        installed_versioned = []
 
         print("\n🔍 Checking your current setup...\n")
 
@@ -160,6 +300,8 @@ class SetupOrchestrator:
             if result.status == ToolStatus.INSTALLED:
                 print(f"✅ {tool} - INSTALLED")
                 installed_tools.append(tool)
+                if self._get_version_metadata(tool) and signal.version:
+                    installed_versioned.append((tool, signal.version))
                 continue
 
             if result.status == ToolStatus.PARTIAL:
@@ -176,6 +318,7 @@ class SetupOrchestrator:
 
                 partial_tools.append(tool)
                 actionable_tools.append(tool)
+                repair_tools.append((tool, result.status))
 
             elif result.status == ToolStatus.OUTDATED:
                 installer = INSTALL_STRATEGY.get(tool, 'winget')
@@ -204,6 +347,7 @@ class SetupOrchestrator:
                 print(f"   Recommended : {recommended}\n")
 
                 actionable_tools.append(tool)
+                repair_tools.append((tool, result.status))
 
             elif result.status == ToolStatus.CONFLICT:
                 installer = INSTALL_STRATEGY.get(tool, 'winget')
@@ -218,6 +362,7 @@ class SetupOrchestrator:
                 print(f"   Recommended : {recommended}\n")
 
                 actionable_tools.append(tool)
+                repair_tools.append((tool, result.status))
 
             else:
                 # Structured format for MISSING tools
@@ -244,7 +389,7 @@ class SetupOrchestrator:
             f"{len(partial_tools)} partial, {len(missing_tools)} missing, "
             f"{len(actionable_tools)} actionable"
         )
-        return missing_tools
+        return missing_tools, repair_tools, installed_versioned
   
         
     def install_missing_tools(self, missing_tools):
@@ -298,8 +443,12 @@ class SetupOrchestrator:
             spinner_thread = threading.Thread(target=self._spinner, args=(stop_spinner,))
             spinner_thread.daemon = True
             spinner_thread.start()
-            
-            success = self.install_tool(tool)
+
+            version_choice = self._select_install_version(tool)
+            if version_choice:
+                print(f"   → Installing version: {version_choice}")
+
+            success = self.install_tool(tool, version_choice)
             
             # Stop spinner
             stop_spinner.set()
@@ -338,18 +487,14 @@ class SetupOrchestrator:
             print(f"\n⚠️  {len(failed_tools)} tools failed to install: {', '.join(failed_tools)}")
         
         return all_successful
-        
-        if failed_tools:
-            print(f"\n⚠️  {len(failed_tools)} tools failed to install: {', '.join(failed_tools)}")
-        
-        return all_successful
-        
-    def install_tool(self, tool):
+
+    def install_tool(self, tool, version=None):
         """
         Intelligently install a tool using the best available method.
-        
+         
         Args:
             tool (str): Tool to install
+            version (str|None): Optional version selection
             
         Returns:
             bool: True if installation was successful
@@ -357,6 +502,20 @@ class SetupOrchestrator:
         
         package = INSTALL_MAP.get(tool)
         strategy = INSTALL_STRATEGY.get(tool, "default")
+        version_metadata = VERSIONED_INSTALL.get(tool, {})
+
+        package_to_install = None
+        if version and version_metadata:
+            package_to_install = version_metadata.get("versions", {}).get(version)
+
+        if package_to_install is None and version:
+            if TOOL_TYPE.get(tool) == "python_lib":
+                package_to_install = f"{tool}=={version}"
+            elif TOOL_TYPE.get(tool) == "npm_lib":
+                package_to_install = f"{tool}@{version}"
+
+        if package_to_install is None:
+            package_to_install = package
 
         # If tool has no package metadata defined, fail gracefully.
         # This prevents a KeyError for tools that are added to a stack but not to the install map.
@@ -365,33 +524,40 @@ class SetupOrchestrator:
             return False
 
         # Handle tools without a winget package ID: Python and npm libraries.
-        if package is None:
+        if package_to_install is None:
             if TOOL_TYPE.get(tool) == "python_lib":
-                print(f"🐍 Installing {tool} via pip...")
+                install_target = tool
+                if version:
+                    install_target = f"{tool}=={version}"
+                print(f"🐍 Installing {install_target} via pip...")
                 installer = self.installers['pip']
-                return installer.install(tool)
+                return installer.install(install_target)
 
             if TOOL_TYPE.get(tool) == "npm_lib":
-                print(f"📦 Installing {tool} via npm...")
+                install_target = tool
+                if version:
+                    install_target = f"{tool}@{version}"
+                print(f"📦 Installing {install_target} via npm...")
                 installer = self.installers['npm']
                 global_install = tool in ["typescript", "yarn"]
-                return installer.install(tool, global_flag=global_install)
+                return installer.install(install_target, global_flag=global_install)
 
             print(f"⚠️  No installation method defined for {tool}. Please install it manually.")
             return False
-        
+
         # Use strategy-based installation
         if strategy == "npm":
-            return self.installers['npm'].install(tool)
+            global_install = tool in ["typescript", "yarn"]
+            return self.installers['npm'].install(package_to_install, global_flag=global_install, version=None)
         elif strategy == "conda":
-            return self.installers['conda'].install(tool)
+            return self.installers['conda'].install(package_to_install)
         elif strategy == "pip":
-            return self.installers['pip'].install(tool)
+            return self.installers['pip'].install(package_to_install, version=None)
         elif strategy == "chocolatey":
-            return self.installers['chocolatey'].install(tool)
+            return self.installers['chocolatey'].install(package_to_install)
         else:
             # Default to winget
-            return self.installers['winget'].install(package)
+            return self.installers['winget'].install(package_to_install, version=version)
     
     def verify_installation(self, tool, retries=5):
         """
@@ -430,7 +596,11 @@ class SetupOrchestrator:
             return False
         
         # Analyze tool status for the selected stack.
-        missing_tools = self.check_missing_tools(required)
+        missing_tools, repair_tools, installed_versioned = self.check_missing_tools(required)
+        self._handle_repairs(repair_tools)
+
+        if not missing_tools and not repair_tools:
+            self._offer_installed_version_changes(required)
         
         # Attempt installation for any actionable problems.
         success = self.install_missing_tools(missing_tools)

@@ -1,0 +1,13 @@
+name: openssl
+command: openssl
+version_flags:
+- version
+type: system
+install_package: ShiningLight.OpenSSL
+detection:
+  executable_names:
+  - openssl
+  - openssl.exe
+  search_paths: []
+  registry_names:
+  - Openssl

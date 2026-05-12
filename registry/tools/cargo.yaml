@@ -1,0 +1,12 @@
+name: cargo
+command: cargo
+version_flags:
+- --version
+type: system
+detection:
+  executable_names:
+  - cargo
+  - cargo.exe
+  search_paths: []
+  registry_names:
+  - Cargo

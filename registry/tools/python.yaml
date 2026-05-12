@@ -1,0 +1,19 @@
+name: python
+command: python
+version_flags:
+- --version
+type: system
+install_package: Python.Python.3.11
+minimum_version: 3.11.0
+versioned_install:
+  default: '3.11'
+  versions:
+    '3.11': Python.Python.3.11
+    '3.12': Python.Python.3.12
+detection:
+  executable_names:
+  - python
+  - python.exe
+  search_paths: []
+  registry_names:
+  - Python

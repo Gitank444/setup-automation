@@ -1,0 +1,14 @@
+name: node
+command: node
+version_flags:
+- --version
+type: system
+install_package: OpenJS.NodeJS
+minimum_version: 18.0.0
+detection:
+  executable_names:
+  - node
+  - node.exe
+  search_paths: []
+  registry_names:
+  - Node

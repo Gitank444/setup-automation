@@ -1,0 +1,14 @@
+name: rust
+command: rustc
+version_flags:
+- --version
+type: system
+install_package: Rustlang.Rust.MSVC
+minimum_version: 1.70.0
+detection:
+  executable_names:
+  - rust
+  - rust.exe
+  search_paths: []
+  registry_names:
+  - Rust

@@ -1,0 +1,13 @@
+name: npm
+command: npm
+version_flags:
+- --version
+type: system
+minimum_version: 9.0.0
+detection:
+  executable_names:
+  - npm
+  - npm.exe
+  search_paths: []
+  registry_names:
+  - Npm

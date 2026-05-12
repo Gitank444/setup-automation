@@ -1,0 +1,13 @@
+name: kotlin-compiler
+command: kotlinc
+version_flags:
+- -version
+type: system
+install_package: JetBrains.Kotlin
+detection:
+  executable_names:
+  - kotlin-compiler
+  - kotlin-compiler.exe
+  search_paths: []
+  registry_names:
+  - Kotlin compiler

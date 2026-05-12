@@ -1,0 +1,13 @@
+name: postman
+command: postman
+version_flags:
+- --version
+type: system
+install_package: Postman.Postman
+detection:
+  executable_names:
+  - postman
+  - postman.exe
+  search_paths: []
+  registry_names:
+  - Postman

@@ -1,0 +1,18 @@
+name: pandas
+command: pandas
+version_flags:
+- --version
+type: python_lib
+install_strategy: pip
+versioned_install:
+  default: 2.1.0
+  versions:
+    2.1.0: pandas==2.1.0
+    2.0.3: pandas==2.0.3
+detection:
+  executable_names:
+  - pandas
+  - pandas.exe
+  search_paths: []
+  registry_names:
+  - Pandas

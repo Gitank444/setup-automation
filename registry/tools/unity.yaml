@@ -1,0 +1,17 @@
+name: unity
+command: unity
+version_flags:
+- --version
+type: system
+install_package: Unity.Hub
+minimum_version: 2023.1.0
+detection:
+  executable_names:
+  - unity
+  - unity.exe
+  search_paths:
+  - C:\Program Files\Unity\Hub
+  app_paths:
+  - /Applications/Unity/Hub
+  registry_names:
+  - Unity

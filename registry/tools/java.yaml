@@ -1,0 +1,13 @@
+name: java
+command: java
+version_flags:
+- --version
+type: system
+install_package: Oracle.JDK.17
+detection:
+  executable_names:
+  - java
+  - java.exe
+  search_paths: []
+  registry_names:
+  - Java

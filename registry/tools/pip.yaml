@@ -1,0 +1,13 @@
+name: pip
+command: pip
+version_flags:
+- --version
+type: system
+minimum_version: 23.0.0
+detection:
+  executable_names:
+  - pip
+  - pip.exe
+  search_paths: []
+  registry_names:
+  - Pip

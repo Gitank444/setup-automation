@@ -1,0 +1,20 @@
+name: vscode
+command: code
+version_flags:
+- --version
+type: system
+install_package: Microsoft.VisualStudioCode
+minimum_version: 1.80.0
+detection:
+  executable_names:
+  - code
+  - code.cmd
+  - code.bat
+  search_paths:
+  - C:\Program Files\Microsoft VS Code
+  - C:\Program Files (x86)\Microsoft VS Code
+  - '%USERPROFILE%\AppData\Local\Programs\Microsoft VS Code'
+  app_paths:
+  - /Applications/Visual Studio Code.app
+  registry_names:
+  - Visual Studio Code

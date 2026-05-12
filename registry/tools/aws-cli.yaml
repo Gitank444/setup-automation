@@ -1,0 +1,13 @@
+name: aws-cli
+command: aws
+version_flags:
+- --version
+type: system
+install_package: Amazon.AWSCLI
+detection:
+  executable_names:
+  - aws-cli
+  - aws-cli.exe
+  search_paths: []
+  registry_names:
+  - Aws cli

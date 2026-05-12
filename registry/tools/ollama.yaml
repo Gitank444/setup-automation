@@ -1,0 +1,14 @@
+name: ollama
+command: ollama
+version_flags:
+- --version
+type: system
+install_package: Ollama.Ollama
+detection:
+  executable_names:
+  - ollama
+  - ollama.exe
+  search_paths:
+  - '%USERPROFILE%\AppData\Local\Programs\Ollama'
+  registry_names:
+  - Ollama

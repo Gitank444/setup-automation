@@ -1,0 +1,18 @@
+name: blender
+command: blender
+version_flags:
+- --version
+type: system
+install_package: BlenderFoundation.Blender
+minimum_version: 4.0.0
+detection:
+  executable_names:
+  - blender
+  - blender.exe
+  subdir_search_paths:
+  - C:\Program Files\Blender Foundation
+  - C:\Program Files (x86)\Blender Foundation
+  app_paths:
+  - /Applications/Blender.app
+  registry_names:
+  - Blender

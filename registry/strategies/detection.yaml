@@ -1,0 +1,19 @@
+defaults:
+  windows_search_paths:
+    - "%ProgramFiles%"
+    - "%ProgramFiles(x86)%"
+    - "%USERPROFILE%\\AppData\\Local"
+    - "%USERPROFILE%\\AppData\\Roaming"
+    - "C:\\Program Files"
+    - "C:\\Program Files (x86)"
+  macos_search_paths:
+    - "/usr/local/bin"
+    - "/usr/bin"
+    - "/Applications"
+    - "~/Applications"
+  linux_search_paths:
+    - "/usr/local/bin"
+    - "/usr/bin"
+    - "/bin"
+    - "/opt"
+    - "~/.local/bin"

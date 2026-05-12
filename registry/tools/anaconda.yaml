@@ -1,0 +1,13 @@
+name: anaconda
+command: conda
+version_flags:
+- --version
+type: system
+install_package: Anaconda.Anaconda3
+detection:
+  executable_names:
+  - anaconda
+  - anaconda.exe
+  search_paths: []
+  registry_names:
+  - Anaconda

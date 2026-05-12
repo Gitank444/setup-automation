@@ -1,0 +1,13 @@
+name: react
+command: npx
+version_flags:
+- --version
+type: npm_lib
+install_strategy: npm
+detection:
+  executable_names:
+  - react
+  - react.exe
+  search_paths: []
+  registry_names:
+  - React

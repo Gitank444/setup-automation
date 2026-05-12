@@ -21,6 +21,19 @@ class BaseInstaller(ABC):
             bool: True if installation was successful, False otherwise
         """
         pass
+
+    def uninstall(self, package, global_flag=False):
+        """
+        Uninstall a package.
+
+        Args:
+            package (str): Package name or package spec to uninstall
+            global_flag (bool): Optional global uninstall for npm
+
+        Returns:
+            bool: True if uninstallation was successful, False otherwise
+        """
+        raise NotImplementedError
     
     @abstractmethod
     def is_available(self):

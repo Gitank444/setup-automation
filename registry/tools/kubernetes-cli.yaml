@@ -1,0 +1,14 @@
+name: kubernetes-cli
+command: kubectl
+version_flags:
+- version
+- --client
+type: system
+install_package: Kubernetes.kubectl
+detection:
+  executable_names:
+  - kubernetes-cli
+  - kubernetes-cli.exe
+  search_paths: []
+  registry_names:
+  - Kubernetes cli

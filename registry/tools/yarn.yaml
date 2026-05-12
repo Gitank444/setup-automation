@@ -1,0 +1,14 @@
+name: yarn
+command: yarn
+version_flags:
+- --version
+type: system
+install_strategy: npm
+minimum_version: 1.22.0
+detection:
+  executable_names:
+  - yarn
+  - yarn.exe
+  search_paths: []
+  registry_names:
+  - Yarn

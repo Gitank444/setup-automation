@@ -1,0 +1,17 @@
+name: android-studio
+command: studio64
+version_flags:
+- --version
+type: system
+install_package: Google.AndroidStudio
+detection:
+  executable_names:
+  - studio64
+  - studio64.exe
+  search_paths:
+  - C:\Program Files\Android\Android Studio
+  - '%USERPROFILE%\AppData\Local\Android\android-studio'
+  app_paths:
+  - /Applications/Android Studio.app
+  registry_names:
+  - Android Studio

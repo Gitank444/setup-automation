@@ -4,7 +4,7 @@ import subprocess
 import sys
 import os
 import shutil
-from config import COMMAND_MAP, VERSION_FLAG, TOOL_TYPE
+from config import COMMAND_MAP, VERSION_FLAG, TOOL_TYPE, DETECTION_RULES
 from models import ToolSignal, LocationVersion
 
 class AdvancedDetector:
@@ -212,7 +212,7 @@ class AdvancedDetector:
                 "/usr/local/bin",
                 "/usr/bin",
                 "/Applications",
-                os.path.expandvars("~/Applications"),
+                os.path.expanduser("~/Applications"),
             ]
         else:  # Linux
             return [
@@ -220,173 +220,117 @@ class AdvancedDetector:
                 "/usr/bin",
                 "/bin",
                 "/opt",
-                os.path.expandvars("~/.local/bin"),
+                os.path.expanduser("~/.local/bin"),
             ]
-    
-    def detect_docker(self):
-        """
-        Special detection for Docker.
-        
-        Returns:
-            bool: True if Docker is installed
-        """
-        # Strategy 1: Docker command in PATH
-        if self.strategy_path_check("docker"):
-            return True
-        
-        # Strategy 2: Docker Desktop specific paths (Windows/macOS)
-        if self.is_windows:
-            docker_paths = [
-                r"C:\Program Files\Docker\Docker",
-                os.path.expandvars(r"%USERPROFILE%\AppData\Local\Docker"),
-            ]
-            if self.strategy_known_paths("docker.exe", docker_paths):
-                return True
-            
-            # Strategy 3: Windows Registry
-            if self.strategy_windows_registry("Docker"):
-                return True
-        
-        elif self.is_macos:
-            docker_paths = [
-                "/Applications/Docker.app",
-            ]
-            if any(os.path.exists(p) for p in docker_paths):
-                return True
-        
-        return False
-    
-    def detect_vscode(self):
-        """
-        Special detection for VSCode.
-        
-        Returns:
-            bool: True if VSCode is installed
-        """
-        # Strategy 1: 'code' command in PATH
-        if self.strategy_path_check("code"):
-            return True
-        
-        # Strategy 2: VSCode specific paths
-        if self.is_windows:
-            vscode_paths = [
-                r"C:\Program Files\Microsoft VS Code",
-                r"C:\Program Files (x86)\Microsoft VS Code",
-                os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Microsoft VS Code"),
-            ]
-            if self.strategy_known_paths("code.exe", vscode_paths):
-                return True
-            
-            # Strategy 3: Windows Registry
-            if self.strategy_windows_registry("Visual Studio Code"):
-                return True
-        
-        elif self.is_macos:
-            vscode_paths = [
-                "/Applications/Visual Studio Code.app",
-            ]
-            if any(os.path.exists(p) for p in vscode_paths):
-                return True
-        
-        return False
-    
-    def detect_android_studio(self):
-        """
-        Special detection for Android Studio.
-        
-        Returns:
-            bool: True if Android Studio is installed
-        """
-        if self.is_windows:
-            # Check Windows Registry
-            if self.strategy_windows_registry("Android Studio"):
-                return True
-            
-            # Check common paths
-            as_paths = [
-                r"C:\Program Files\Android\Android Studio",
-                os.path.expandvars(r"%USERPROFILE%\AppData\Local\Android\android-studio"),
-            ]
-            if self.strategy_known_paths("studio64.exe", as_paths):
-                return True
-        
-        elif self.is_macos:
-            if os.path.exists("/Applications/Android Studio.app"):
-                return True
-        
-        return False
-    
-    def detect_unity(self):
-        """
-        Special detection for Unity.
-        
-        Returns:
-            bool: True if Unity is installed
-        """
-        if self.is_windows:
-            if self.strategy_windows_registry("Unity"):
-                return True
-            
-            unity_paths = [
-                r"C:\Program Files\Unity\Hub",
-            ]
-            if self.strategy_known_paths("unity.exe", unity_paths):
-                return True
-        
-        elif self.is_macos:
-            if os.path.exists("/Applications/Unity/Hub"):
-                return True
-        
-        return False
-    
-    def detect_blender(self):
-        """
-        Special detection for Blender.
-        
-        Returns:
-            bool: True if Blender is installed
-        """
-        if self.strategy_path_check("blender"):
-            return True
-        
-        if self.is_windows:
-            blender_paths = [
-                r"C:\Program Files\Blender Foundation\Blender",
-            ]
-            if self.strategy_known_paths("blender.exe", blender_paths):
-                return True
-            
-            if self.strategy_windows_registry("Blender"):
-                return True
-        
-        elif self.is_macos:
-            if os.path.exists("/Applications/Blender.app"):
-                return True
-        
-        return False
-    
-    def detect_ollama(self):
-        """
-        Special detection for Ollama.
-        
-        Returns:
-            bool: True if Ollama is installed
-        """
-        if self.strategy_path_check("ollama"):
-            return True
-        
-        if self.is_windows:
-            if self.strategy_windows_registry("Ollama"):
-                return True
-            
-            ollama_paths = [
-                os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Ollama"),
-            ]
-            if self.strategy_known_paths("ollama.exe", ollama_paths):
-                return True
-        
-        return False
-    
+
+    def _expand_path(self, raw_path):
+        if not raw_path:
+            return raw_path
+        return os.path.expanduser(os.path.expandvars(raw_path))
+
+    def _derive_executable_names(self, tool, cmd, rules):
+        names = rules.get("executable_names")
+        if names:
+            return names
+
+        candidates = [cmd]
+        if self.is_windows and not cmd.lower().endswith((".exe", ".cmd", ".bat")):
+            candidates.extend([f"{cmd}.exe", f"{cmd}.cmd", f"{cmd}.bat"])
+        return candidates
+
+    def _find_in_directories(self, directories, exe_names, recursive=False):
+        for raw_path in directories or []:
+            base_path = self._expand_path(raw_path)
+            if not base_path:
+                continue
+
+            if recursive and os.path.isdir(base_path):
+                for entry in os.listdir(base_path):
+                    candidate_dir = os.path.join(base_path, entry)
+                    if not os.path.isdir(candidate_dir):
+                        continue
+                    for exe in exe_names:
+                        candidate = os.path.join(candidate_dir, exe)
+                        if os.path.exists(candidate):
+                            return candidate
+
+            if os.path.isdir(base_path):
+                for exe in exe_names:
+                    candidate = os.path.join(base_path, exe)
+                    if os.path.exists(candidate):
+                        return candidate
+
+            if os.path.isfile(base_path) and os.path.basename(base_path) in exe_names:
+                return base_path
+
+        return None
+
+    def _find_existing_path(self, paths):
+        for raw_path in paths or []:
+            path = self._expand_path(raw_path)
+            if path and os.path.exists(path):
+                return path
+        return None
+
+    def _get_detection_rules(self, tool):
+        return DETECTION_RULES.get(tool, {})
+
+    def _search_with_rules(self, tool, cmd, flags, rules):
+        all_locations_found = []
+        primary_location = None
+        primary_version = None
+        path_found = False
+        broken = False
+
+        exe_names = self._derive_executable_names(tool, cmd, rules)
+
+        # Search the PATH first.
+        for exe in exe_names:
+            path_location = self.strategy_path_check(exe)
+            if path_location:
+                path_found = True
+                primary_location = path_location
+                primary_version = self.strategy_version_extract(path_location, flags)
+                all_locations_found.append(LocationVersion(path=path_location, version=primary_version))
+                break
+
+        # If VSCode on Windows has a CLI wrapper, prefer it for version checks.
+        if tool == "vscode" and self.is_windows and not primary_location:
+            vscode_wrapper = self._find_vscode_cli_wrapper()
+            if vscode_wrapper:
+                path_found = True
+                primary_location = vscode_wrapper
+                primary_version = self.strategy_version_extract(vscode_wrapper, flags)
+                all_locations_found.append(LocationVersion(path=primary_location, version=primary_version))
+
+        # Custom configured search paths.
+        if not primary_location:
+            known_location = self._find_in_directories(rules.get("search_paths"), exe_names, recursive=False)
+            if not known_location:
+                known_location = self._find_in_directories(rules.get("subdir_search_paths"), exe_names, recursive=True)
+
+            if known_location:
+                primary_location = known_location
+                primary_version = self.strategy_version_extract(known_location, flags)
+                all_locations_found.append(LocationVersion(path=known_location, version=primary_version))
+
+        # Application bundle existence checks.
+        if not primary_location:
+            app_location = self._find_existing_path(rules.get("app_paths"))
+            if app_location:
+                primary_location = app_location
+                primary_version = self.strategy_version_extract(cmd, flags)
+                all_locations_found.append(LocationVersion(path=primary_location, version=primary_version))
+
+        # Registry fallback for Windows when explicit paths are not enough.
+        if self.is_windows and not primary_location and rules.get("registry_names"):
+            for app_name in rules.get("registry_names", []):
+                if self.strategy_windows_registry(app_name):
+                    all_locations_found.append(LocationVersion(path=f"<registry:{app_name}>", version=None))
+                    break
+
+        return all_locations_found, path_found, primary_location, primary_version
+
     def check_software(self, tool):
         """Intelligently detect if software is installed.
 
@@ -421,6 +365,45 @@ class AdvancedDetector:
                 version=None,
                 location=location,
                 all_locations=[]
+            )
+
+        # Use generic rule-driven detection for configured tools.
+        rules = self._get_detection_rules(tool)
+        if rules:
+            all_locations_found, path_found, primary_location, primary_version = self._search_with_rules(tool, cmd, flags, rules)
+
+            if not all_locations_found:
+                known_location = self.strategy_known_paths(cmd, known_paths)
+                if known_location:
+                    primary_location = known_location
+                    primary_version = self.strategy_version_extract(known_location, flags)
+                    all_locations_found.append(LocationVersion(
+                        path=known_location,
+                        version=primary_version
+                    ))
+
+            if not all_locations_found:
+                fallback_version = self.strategy_version_extract(cmd, flags)
+                if fallback_version:
+                    all_locations_found.append(LocationVersion(
+                        path="<system-path>",
+                        version=fallback_version
+                    ))
+                    primary_version = fallback_version
+
+            binary_found = len(all_locations_found) > 0
+            if binary_found and not primary_version and tool != "vscode":
+                broken = True
+
+            return ToolSignal(
+                tool=tool,
+                binary_found=binary_found,
+                path_found=path_found,
+                version=primary_version,
+                location=primary_location,
+                all_locations=all_locations_found,
+                broken=broken,
+                reason=None
             )
 
         # Search PATH first (highest priority)

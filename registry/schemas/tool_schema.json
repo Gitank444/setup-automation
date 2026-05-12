@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tool Configuration",
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "command": {"type": "string"},
+    "version_flags": {
+      "type": ["array", "null"],
+      "items": {"type": "string"}
+    },
+    "type": {
+      "type": "string",
+      "enum": ["system", "python_lib", "npm_lib"]
+    },
+    "install_package": {"type": ["string", "null"]},
+    "install_strategy": {"type": "string"},
+    "minimum_version": {"type": "string"},
+    "versioned_install": {"type": "object"},
+    "detection": {
+      "type": "object",
+      "properties": {
+        "executable_names": {"type": "array", "items": {"type": "string"}},
+        "search_paths": {"type": "array", "items": {"type": "string"}},
+        "subdir_search_paths": {"type": "array", "items": {"type": "string"}},
+        "app_paths": {"type": "array", "items": {"type": "string"}},
+        "registry_names": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "command", "type", "detection"],
+  "additionalProperties": false
+}

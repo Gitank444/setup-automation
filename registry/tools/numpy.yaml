@@ -1,0 +1,13 @@
+name: numpy
+command: python
+version_flags:
+- --version
+type: python_lib
+install_strategy: conda
+detection:
+  executable_names:
+  - numpy
+  - numpy.exe
+  search_paths: []
+  registry_names:
+  - Numpy

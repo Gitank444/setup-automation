@@ -1,0 +1,15 @@
+install_strategy:
+  docker: winget
+  pandas: pip
+  react: npm
+  typescript: npm
+  yarn: npm
+  numpy: conda
+  vscode_cpp_extension: vscode_extension
+  mingw: manual_or_custom
+versioned_install:
+  python:
+    default: "3.11"
+    versions:
+      "3.11": Python.Python.3.11
+      "3.12": Python.Python.3.12
