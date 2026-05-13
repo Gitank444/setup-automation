@@ -1,6 +1,8 @@
 """Main orchestrator for setup automation."""
 import time
 import threading
+import os
+import subprocess
 from config import STACKS, INSTALL_MAP, INSTALL_STRATEGY, TOOL_TYPE, VERSIONED_INSTALL
 from checkers import check_software_advanced
 from installers import (
@@ -33,6 +35,46 @@ class SetupOrchestrator:
         }
         self.resolver_agent = ResolverAgent()
         self.failure_agent = FailureAgent()
+
+    def _reload_environment_path(self):
+        """
+        Reload the PATH environment variable from the system.
+        
+        After system-level installations (winget, chocolatey), Windows updates
+        the registry PATH but Python's os.environ['PATH'] is stale.
+        This method refreshes it so subprocess calls can find newly installed tools.
+        """
+        import sys
+        if sys.platform == "win32":
+            try:
+                import winreg
+                # Read from registry (where Windows stores PATH)
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                    r'Environment') as key:
+                    user_path, _ = winreg.QueryValueEx(key, 'PATH')
+                    os.environ['PATH'] = user_path + os.pathsep + os.environ.get('PATH', '')
+                
+                # Also get system PATH
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                    r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment') as key:
+                    system_path, _ = winreg.QueryValueEx(key, 'PATH')
+                    if system_path not in os.environ['PATH']:
+                        os.environ['PATH'] = os.environ['PATH'] + os.pathsep + system_path
+            except Exception as e:
+                print(f"⚠️  Could not reload PATH from registry: {e}")
+        else:
+            # On Unix-like systems, try to reload from shell
+            try:
+                result = subprocess.run(
+                    ['bash', '-i', '-c', 'echo $PATH'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if result.returncode == 0:
+                    os.environ['PATH'] = result.stdout.strip() + os.pathsep + os.environ.get('PATH', '')
+            except:
+                pass
 
     def _get_version_metadata(self, tool):
         return VERSIONED_INSTALL.get(tool)
@@ -85,16 +127,34 @@ class SetupOrchestrator:
         for tool, status in repair_tools:
             print(f"   - {tool}: {status.name}")
 
+        print("\n🔄 Attempting automatic repair for PARTIAL and BROKEN tools...\n")
+        
+        auto_repaired = []
         for tool, status in repair_tools:
-            answer = input(f"\nDo you want to fix {tool} by reinstalling it? (y/n): ")
-            if answer.strip().lower() != 'y':
-                continue
-            version_choice = self._select_install_version(tool)
-            if version_choice:
-                print(f"   → Reinstalling {tool} version {version_choice}")
+            # Automatically repair PARTIAL and BROKEN tools
+            if status.name in ["PARTIAL", "BROKEN", "OUTDATED"]:
+                print(f"🔧 Auto-repairing {tool}...")
+                version_choice = self._select_install_version(tool)
+                if version_choice:
+                    print(f"   → Using version: {version_choice}")
+                else:
+                    print(f"   → Using default version")
+                
+                success = self._repair_tool(tool, version_choice)
+                if success:
+                    print(f"✅ {tool} repair completed\n")
+                    auto_repaired.append(tool)
+                else:
+                    print(f"⚠️  {tool} repair encountered issues\n")
             else:
-                print(f"   → Reinstalling {tool}")
-            self._repair_tool(tool, version_choice)
+                # For CONFLICT, still ask user
+                answer = input(f"\n⚠️  Conflict detected for {tool}. Fix by reinstalling? (y/n): ")
+                if answer.strip().lower() == 'y':
+                    version_choice = self._select_install_version(tool)
+                    self._repair_tool(tool, version_choice)
+        
+        if auto_repaired:
+            print(f"\n✅ Auto-repaired: {', '.join(auto_repaired)}")
 
     def _offer_installed_version_changes(self, required_tools):
         versioned_installed = []
@@ -488,13 +548,14 @@ class SetupOrchestrator:
         
         return all_successful
 
-    def install_tool(self, tool, version=None):
+    def install_tool(self, tool, version=None, max_retries=3):
         """
         Intelligently install a tool using the best available method.
          
         Args:
             tool (str): Tool to install
             version (str|None): Optional version selection
+            max_retries (int): Maximum retry attempts
             
         Returns:
             bool: True if installation was successful
@@ -518,7 +579,6 @@ class SetupOrchestrator:
             package_to_install = package
 
         # If tool has no package metadata defined, fail gracefully.
-        # This prevents a KeyError for tools that are added to a stack but not to the install map.
         if tool not in INSTALL_MAP:
             print(f"⚠️  No installation metadata found for {tool}. Please add it to config/constants.py.")
             return False
@@ -531,7 +591,14 @@ class SetupOrchestrator:
                     install_target = f"{tool}=={version}"
                 print(f"🐍 Installing {install_target} via pip...")
                 installer = self.installers['pip']
-                return installer.install(install_target)
+                for attempt in range(max_retries):
+                    result = installer.install(install_target)
+                    if result:
+                        return True
+                    if attempt < max_retries - 1:
+                        print(f"   Retry attempt {attempt + 1}...")
+                        time.sleep(2)
+                return False
 
             if TOOL_TYPE.get(tool) == "npm_lib":
                 install_target = tool
@@ -540,24 +607,46 @@ class SetupOrchestrator:
                 print(f"📦 Installing {install_target} via npm...")
                 installer = self.installers['npm']
                 global_install = tool in ["typescript", "yarn"]
-                return installer.install(install_target, global_flag=global_install)
+                for attempt in range(max_retries):
+                    result = installer.install(install_target, global_flag=global_install)
+                    if result:
+                        return True
+                    if attempt < max_retries - 1:
+                        print(f"   Retry attempt {attempt + 1}...")
+                        time.sleep(2)
+                return False
 
             print(f"⚠️  No installation method defined for {tool}. Please install it manually.")
             return False
 
-        # Use strategy-based installation
-        if strategy == "npm":
-            global_install = tool in ["typescript", "yarn"]
-            return self.installers['npm'].install(package_to_install, global_flag=global_install, version=None)
-        elif strategy == "conda":
-            return self.installers['conda'].install(package_to_install)
-        elif strategy == "pip":
-            return self.installers['pip'].install(package_to_install, version=None)
-        elif strategy == "chocolatey":
-            return self.installers['chocolatey'].install(package_to_install)
-        else:
-            # Default to winget
-            return self.installers['winget'].install(package_to_install, version=version)
+        # Use strategy-based installation with retries
+        strategies = [strategy] if strategy != "default" else ["winget", "chocolatey"]
+        
+        for attempt in range(max_retries):
+            if strategy == "npm":
+                global_install = tool in ["typescript", "yarn"]
+                result = self.installers['npm'].install(package_to_install, global_flag=global_install, version=None)
+            elif strategy == "conda":
+                result = self.installers['conda'].install(package_to_install)
+            elif strategy == "pip":
+                result = self.installers['pip'].install(package_to_install, version=None)
+            elif strategy == "chocolatey":
+                result = self.installers['chocolatey'].install(package_to_install)
+            else:
+                # Default to winget
+                result = self.installers['winget'].install(package_to_install, version=version)
+            
+            if result:
+                # Reload environment after successful system install
+                if strategy in ["default", "winget", "chocolatey"]:
+                    self._reload_environment_path()
+                return True
+            
+            if attempt < max_retries - 1:
+                print(f"   ⏳ Retrying installation (attempt {attempt + 2}/{max_retries})...")
+                time.sleep(3)
+        
+        return False
     
     def verify_installation(self, tool, retries=5):
         """
@@ -571,6 +660,10 @@ class SetupOrchestrator:
             bool: True if tool is ready
         """
         print(f"Verifying {tool}...")
+        
+        # Reload environment after installation to pick up newly installed tools
+        self._reload_environment_path()
+        time.sleep(1)  # Give system time to update
         
         for attempt in range(retries):
             signal = check_software_advanced(tool)

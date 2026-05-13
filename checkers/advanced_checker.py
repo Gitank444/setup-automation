@@ -53,7 +53,14 @@ class AdvancedDetector:
         elif isinstance(flags, str):
             flags = [flags]
 
-        for flag in flags:
+        # Add fallback flags automatically
+        all_flags = list(flags)  # Copy provided flags
+        fallback_flags = ["--version", "-v", "-V", "--help", "-h", "/?"]
+        for fb_flag in fallback_flags:
+            if fb_flag not in all_flags:
+                all_flags.append(fb_flag)
+
+        for flag in all_flags:
             try:
                 result = subprocess.run(
                     [cmd, flag],
@@ -82,7 +89,32 @@ class AdvancedDetector:
         Returns:
             bool: True if version command succeeds
         """
-        return self.strategy_version_extract(cmd, flags) is not None
+        if flags is None:
+            flags = ["--version", "-v", "--help"]
+        elif isinstance(flags, str):
+            flags = [flags]
+
+        # Add fallback flags automatically
+        all_flags = list(flags)
+        fallback_flags = ["--version", "-v", "-V", "--help", "-h", "/?"]
+        for fb_flag in fallback_flags:
+            if fb_flag not in all_flags:
+                all_flags.append(fb_flag)
+
+        for flag in all_flags:
+            try:
+                result = subprocess.run(
+                    [cmd, flag],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return True
+            except:
+                continue
+
+        return False
 
     def _extract_version(self, output):
         """Extracts the first semantic version-like string from output."""
@@ -354,7 +386,7 @@ class AdvancedDetector:
         path_found = False
         broken = False
 
-        # Handle Python libraries separately
+        # Handle Python libraries separately - NO system command execution
         if TOOL_TYPE.get(tool) == "python_lib":
             detected = self._check_python_lib(tool)
             location = sys.executable if detected else None
@@ -362,10 +394,38 @@ class AdvancedDetector:
                 tool=tool,
                 binary_found=detected,
                 path_found=detected,
-                version=None,
+                version=None,  # Python libraries don't report version this way
                 location=location,
                 all_locations=[]
             )
+
+        # Handle npm libraries
+        if TOOL_TYPE.get(tool) == "npm_lib":
+            try:
+                result = subprocess.run(
+                    ["npm", "list", "-g", tool],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                detected = result.returncode == 0
+                return ToolSignal(
+                    tool=tool,
+                    binary_found=detected,
+                    path_found=detected,
+                    version=None,
+                    location="npm global" if detected else None,
+                    all_locations=[]
+                )
+            except:
+                return ToolSignal(
+                    tool=tool,
+                    binary_found=False,
+                    path_found=False,
+                    version=None,
+                    location=None,
+                    all_locations=[]
+                )
 
         # Use generic rule-driven detection for configured tools.
         rules = self._get_detection_rules(tool)
@@ -392,8 +452,20 @@ class AdvancedDetector:
                     primary_version = fallback_version
 
             binary_found = len(all_locations_found) > 0
-            if binary_found and not primary_version and tool != "vscode":
-                broken = True
+            # Only mark broken if binary found but CANNOT EXECUTE (not just missing version)
+            if binary_found and not primary_version and tool not in ["vscode", "docker"]:
+                # Try direct execution test before marking broken
+                try:
+                    result = subprocess.run(
+                        [cmd, "--help"],
+                        capture_output=True,
+                        text=True,
+                        timeout=3
+                    )
+                    if result.returncode != 0 and result.returncode != 1:
+                        broken = True
+                except:
+                    broken = True
 
             return ToolSignal(
                 tool=tool,
@@ -432,7 +504,8 @@ class AdvancedDetector:
                 if wrapper_version and not primary_version:
                     primary_version = wrapper_version
 
-            if not primary_version and tool != "vscode":
+            # Don't mark broken for VSCode or Docker which may not report version
+            if not primary_version and tool not in ["vscode", "docker"]:
                 broken = True
 
         # Search known paths (secondary priority)

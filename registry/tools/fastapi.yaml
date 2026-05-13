@@ -1,12 +1,4 @@
 name: fastapi
-command: fastapi
-version_flags:
-- --version
 type: python_lib
-detection:
-  executable_names:
-  - fastapi
-  - fastapi.exe
-  search_paths: []
-  registry_names:
-  - Fastapi
+install_package: fastapi
+minimum_version: "0.68.0"

@@ -1,8 +1,19 @@
-"""Setup orchestrator package."""
-import signal
-from agents.resolver_agent import ResolverAgent
+"""
+Main entry point for the Setup Automation System.
+
+This script orchestrates the installation of development stacks
+with intelligent package manager selection and verification.
+"""
 
 from .setup_orchestrator import SetupOrchestrator
+def main():
+    """Run the setup orchestrator."""
+    orchestrator = SetupOrchestrator()
+    success = orchestrator.run()
+    
+    return 0 if success else 1
 
-__all__ = ['SetupOrchestrator']
 
+if __name__ == "__main__":
+    exit(main())
+    

@@ -75,12 +75,21 @@ def check_software(tool):
     """
     tool_type = TOOL_TYPE.get(tool)
 
-    if tool_type == "system":
-        cmd = COMMAND_MAP.get(tool, tool)
-        return check_system_tool(cmd)
-
-    elif tool_type == "python_lib":
+    if tool_type == "python_lib":
         return check_python_lib(tool)
 
+    if tool_type == "npm_lib":
+        try:
+            subprocess.run(
+                ["npm", "list", "-g", tool],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True
+        except:
+            return False
+
+    # Default: system tool
     cmd = COMMAND_MAP.get(tool, tool)
     return check_system_tool(cmd)
